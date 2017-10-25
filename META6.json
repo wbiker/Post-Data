@@ -1,0 +1,19 @@
+{
+  "authors" : [
+    "wbiker"
+  ],
+  "build-depends" : [ ],
+  "depends" : [ ],
+  "description" : "blah blah blah",
+  "license" : "Artistic-2.0",
+  "name" : "Post::Data",
+  "perl" : "6.c",
+  "provides" : {
+    "Post::Data" : "lib/Post/Data.pm6"
+  },
+  "resources" : [ ],
+  "source-url" : "",
+  "tags" : [ ],
+  "test-depends" : [ ],
+  "version" : "0.0.1"
+}
