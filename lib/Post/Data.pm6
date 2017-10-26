@@ -1,6 +1,7 @@
 use v6.c;
-unit class Post::Data:ver<0.0.1>;
 
+use JSON::Fast;
+unit class Post::Data:ver<0.0.1>;
 
 =begin pod
 
@@ -27,3 +28,20 @@ Copyright 2017 wbiker
 This library is free software; you can redistribute it and/or modify it under the Artistic License 2.0.
 
 =end pod
+
+has $.url;
+has $.index;
+has $.exitcode;
+has $.output;
+
+method post(:%data, :$type) {
+    my $json = to-json %data, :!pretty;
+    #dd $json;
+    my $url = $!url ~ "/" ~ $!index ~ "/" ~ $type;
+    say "Send data to '$url'";
+    my @cmds = "curl", "-XPOST", "-H", "content-type:application/json", $url, "-d", "'$json'";
+    my $proc = shell @cmds, :out;
+
+    $!exitcode = $proc.exitcode;
+    $!output = $proc.out.slurp;
+}
