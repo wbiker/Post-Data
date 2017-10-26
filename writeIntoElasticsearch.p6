@@ -44,7 +44,12 @@ for @log-files -> $log {
     }
 
     dd %data-to-post;
-    #$elasticsearch.post(data => %data-to-post, type => "data");
+
+    # Only send data when I can find following. Otherwise, the test run was not
+    # started or cancelled by user.
+    if $log-content ~~ /Test\sGroup\sName\: | Suite \s Name \:/ {
+        #$elasticsearch.post(data => %data-to-post, type => "data");
+    }
 }
 
 sub find-files(IO::Path $path) {
