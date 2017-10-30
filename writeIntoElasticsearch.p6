@@ -23,9 +23,17 @@ say "Found {@log-files.elems} log files";
 
 my $elasticsearch = Post::Data.new(url => "http://localhost:9200", index => "test");
 for @log-files -> $log {
-    my %data-to-post;
-
     my $log-content = $log.slurp;
+
+    if not $log-content ~~ /Test\sGroup\sName\: | Suite \s Name \:/ {
+        # Only send data when I can find following. Otherwise, the test run was not
+        # started or cancelled by user.
+        next;
+    }
+
+    my %data-to-post;
+    %data-to-post<log> = $log.basename;
+
     if $log-content ~~ / "_testCaseName:" (<-[,]>+) "," / {
         %data-to-post<name> = ~$0;
     }
@@ -40,11 +48,16 @@ for @log-files -> $log {
         %data-to-post<date> = "NotFound";
     }
 
-    if $log-content ~~ /"vmImages:" (<-[,]>+) / or $log-content ~~ /"using the default VM:" \s (.*?) <[,]>? $$/ {
+    if $log-content ~~ /"vmImages:" (<-[,]>+) / or $log-content ~~ /"using the default VM:" \s (.*?) \s? $$/ {
         %data-to-post<vms> = ~$0;
+        if ~$0 ~~ / \s / {
+            say $log;
+            exit;
+        }
     }
     else {
         %data-to-post<vms> = "NotFound";
+        say "No vm " ~ $log;
     }
 
     if $log-content ~~ / "Set update warehouse credentials:" \s "'" (<-[']>+) "'" \s "/" \s "'" (<-[']>+) "'" \s / {
@@ -109,14 +122,16 @@ for @log-files -> $log {
         }
     }
 
-    #dd %data-to-post;
-
-    # Only send data when I can find following. Otherwise, the test run was not
-    # started or cancelled by user.
-    if $log-content ~~ /Test\sGroup\sName\: | Suite \s Name \:/ {
-        say "Send data" ~ $log;
-        $elasticsearch.post(data => %data-to-post, type => "data");
+    if $log-content ~~ / ( <-[\n]>+ "Exception:" \s .*? ) $$ / {
+        %data-to-post<exception>.push: ~$0;
     }
+    else {
+        %data-to-post<exception> = "No exception found";
+    }
+
+#    dd %data-to-post;
+
+    $elasticsearch.post(data => %data-to-post, type => "data");
 }
 
 sub find-files(IO::Path $path) {
@@ -124,6 +139,7 @@ sub find-files(IO::Path $path) {
     say "Check $path";
 
     if $path.f {
+        @test-files.push: $path;
         return @test-files;
     }
 
@@ -133,7 +149,6 @@ sub find-files(IO::Path $path) {
             next;
         }
 
-        #next unless $file ~~ /"/;
         @test-files.push: $file;
     }
 

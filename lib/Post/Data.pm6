@@ -39,7 +39,8 @@ method post(:%data, :$type) {
     "tmp.json".IO.spurt($json);
     #dd $json;
     my $url = $!url ~ "/" ~ $!index ~ "/" ~ $type;
-    say "Send data to '$url'";
+
+    "tmp.json".IO.spurt($json);
     my @cmds = "curl", "-XPOST", "-H", "content-type:application/json", $url, "-d", '@tmp.json';
     my $proc = shell @cmds, :out;
 
