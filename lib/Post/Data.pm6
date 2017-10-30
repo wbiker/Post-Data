@@ -36,10 +36,11 @@ has $.output;
 
 method post(:%data, :$type) {
     my $json = to-json %data, :!pretty;
+    "tmp.json".IO.spurt($json);
     #dd $json;
     my $url = $!url ~ "/" ~ $!index ~ "/" ~ $type;
     say "Send data to '$url'";
-    my @cmds = "curl", "-XPOST", "-H", "content-type:application/json", $url, "-d", "'$json'";
+    my @cmds = "curl", "-XPOST", "-H", "content-type:application/json", $url, "-d", '@tmp.json';
     my $proc = shell @cmds, :out;
 
     $!exitcode = $proc.exitcode;

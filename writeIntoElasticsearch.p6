@@ -2,18 +2,31 @@ use v6;
 
 use Post::Data;
 
-my $dir = "";
+# blacklist to filter error message that I'm not interested in.
+my @error-blacklist = (
+    /:i 'Management Communications System already exists'/,
+    /:i 'send heartbeat fails'/,
+    /:i 'UnknownHostException: p0.q.hmr.sophos.com: unknown error'/,
+    /:i 'ThunderResourceProvider.uncaughtException (ThreadUtils.groovy:89)'/,
+    /:i 'CommandExecutor already exists'/,
+    /:i 'beforeConfiguration catch exception'/,
+    /:i 'exit-code: 65535'/,
+    /:i 'found unknown actor type: INSTANCE'/,
+    /:i 'already exists.'/,
+);
+
+my $dir = "/home/wolfgangbanaston/repos/lwrap/logs".IO;
 
 my @log-files = find-files($dir);
 
-say "Found {$log-files.elems} log files";
+say "Found {@log-files.elems} log files";
 
 my $elasticsearch = Post::Data.new(url => "http://localhost:9200", index => "test");
 for @log-files -> $log {
     my %data-to-post;
 
     my $log-content = $log.slurp;
-    if $log-content ~~ / "_testCaseName:" (<-[,]>+) , / {
+    if $log-content ~~ / "_testCaseName:" (<-[,]>+) "," / {
         %data-to-post<name> = ~$0;
     }
     else {
@@ -27,39 +40,91 @@ for @log-files -> $log {
         %data-to-post<date> = "NotFound";
     }
 
-    if $log-content ~~ /"vmImages:" (<-[\s]>+) \s / {
+    if $log-content ~~ /"vmImages:" (<-[,]>+) / or $log-content ~~ /"using the default VM:" \s (.*?) <[,]>? $$/ {
         %data-to-post<vms> = ~$0;
     }
     else {
         %data-to-post<vms> = "NotFound";
     }
 
-    if $log-content ~~ / "Set update warehouse credentials:" \s "'" (<-[']>+) "'" \s / \s "'" (<-[']>+) "'" \s / {
+    if $log-content ~~ / "Set update warehouse credentials:" \s "'" (<-[']>+) "'" \s "/" \s "'" (<-[']>+) "'" \s / {
         %data-to-post<warehouseuser> = ~$0;
-        %data-to-post<warehousepassword> = ~$1;
+        #%data-to-post<warehousepassword> = ~$1;
     }
     else {
         %data-to-post<warehouseuser> = "NotFound";
-        %data-to-post<warehousepassword> = "NotFound";
+        #%data-to-post<warehousepassword> = "NotFound";
     }
 
-    dd %data-to-post;
+    if $log-content ~~ /^^ <-[:]>+ ":" \s "PASS" $$/ {
+        %data-to-post<has_passed> = "true";
+    }
+    else {
+        %data-to-post<has_passed> = "false";
+    }
+
+    if $log-content ~~ /^^ ('https://thunder.cloud.sophos'.*)$$/ {
+        %data-to-post<thunder_link> = ~$0;
+    }
+    else
+    {
+        %data-to-post<thunder_link> = "NotFound";
+    }
+
+    if %data-to-post<has_passed> eq "false" {
+        my @errors = ();
+        my $thunder-link = "";
+
+        my $curLogEntry = "";
+        for $log-content.split(/\n/) -> $line {
+            # check whether it is a new log entry
+            if $line ~~ /^^ \d+\-\d+\-\d+ \s \d+\:\d+\:\d+ / {
+                # new log entry. Print last one if desired
+                if $curLogEntry ~~ /'[ERROR'/ {
+                    # A lot of errors are caused by Lightning/Thunder and can be ignored.
+                    # The test run can pass anyway. So, I use a blacklist to filter out these errors
+                    unless $curLogEntry ~~ @error-blacklist.any {
+                        @errors.push($curLogEntry)
+                    }
+                    $curLogEntry = "";
+                    next;
+                }
+                else {
+                    $curLogEntry = $line;
+                    next;
+                }
+            }
+            else {
+                # no timestamp found. Expect it to be a log entry with more
+                # than one line.
+                $curLogEntry ~= "\n$line";
+            }
+        }
+
+        if @errors.elems > 0 {
+            %data-to-post<errors> = @errors;
+        }
+        else {
+            %data-to-post<errors> = "Nothing found";
+        }
+    }
+
+    #dd %data-to-post;
 
     # Only send data when I can find following. Otherwise, the test run was not
     # started or cancelled by user.
     if $log-content ~~ /Test\sGroup\sName\: | Suite \s Name \:/ {
-        #$elasticsearch.post(data => %data-to-post, type => "data");
+        say "Send data" ~ $log;
+        $elasticsearch.post(data => %data-to-post, type => "data");
     }
 }
 
 sub find-files(IO::Path $path) {
     my @test-files;
+    say "Check $path";
 
     if $path.f {
-        if $path.basename ~~ /".log" $/ {
-            @test-files.push: $path;
-            return @test-files;
-        }
+        return @test-files;
     }
 
     for $path.IO.dir -> $file {
@@ -68,7 +133,7 @@ sub find-files(IO::Path $path) {
             next;
         }
 
-        next unless $file ~~ /".log" $/;
+        #next unless $file ~~ /"/;
         @test-files.push: $file;
     }
 
