@@ -21,7 +21,7 @@ my @log-files = find-files($dir);
 
 say "Found {@log-files.elems} log files";
 
-my $elasticsearch = Post::Data.new(url => "http://localhost:9200", index => "test");
+my $elasticsearch = Post::Data.new(url => "http://10.97.98.87:9200", index => "test");
 for @log-files -> $log {
     my $log-content = $log.slurp;
 

@@ -29,8 +29,8 @@ This library is free software; you can redistribute it and/or modify it under th
 
 =end pod
 
-has $.url;
-has $.index;
+has $.url is required;
+has $.index is required;
 has $.exitcode;
 has $.output;
 
