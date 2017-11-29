@@ -31,15 +31,21 @@ This library is free software; you can redistribute it and/or modify it under th
 
 has $.url is required;
 has $.index is required;
+has $.type;
 has $.exitcode;
 has $.output;
 
-method post(:%data, :$type) {
+submethod TWEAK() {
+    $!type = "items" unless $!type;
+}
+
+method post(:%data) {
     my $json = to-json %data, :!pretty;
     "tmp.json".IO.spurt($json);
     #dd $json;
-    my $url = $!url ~ "/" ~ $!index ~ "/" ~ $type;
+    my $url = $!url ~ "/" ~ $!index ~ "/" ~ $!type;
 
+    say "Url to post data: $url";
     "tmp.json".IO.spurt($json);
     my @cmds = "curl", "-XPOST", "-H", "content-type:application/json", $url, "-d", '@tmp.json';
     my $proc = shell @cmds, :out;
